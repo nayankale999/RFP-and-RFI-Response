@@ -6,7 +6,7 @@ from fastapi.responses import JSONResponse
 
 from app.config import get_settings
 from app.shared.exceptions import RFPAutomationError
-from app.api import auth, projects, documents, requirements, responses, export, pricing
+from app.api import auth, projects, documents, requirements, responses, export, pricing, generate
 from app.database import engine, Base
 import app.models  # noqa: F401 - Import models so Base.metadata knows about all tables
 
@@ -50,6 +50,7 @@ app.include_router(requirements.router)
 app.include_router(responses.router)
 app.include_router(export.router)
 app.include_router(pricing.router)
+app.include_router(generate.router)
 
 
 @app.get("/api/health")

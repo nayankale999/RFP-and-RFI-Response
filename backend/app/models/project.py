@@ -15,6 +15,11 @@ class Project(Base):
     name: Mapped[str] = mapped_column(String(500), nullable=False)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     upload_context: Mapped[str | None] = mapped_column(Text, nullable=True)
+    processing_status: Mapped[str | None] = mapped_column(
+        String(50), nullable=True
+    )  # None, processing, completed, failed
+    processing_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    processing_started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     status: Mapped[str] = mapped_column(
         String(50), nullable=False, default="draft"
     )  # draft, in_progress, review, completed, archived

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { useParams } from "next/navigation";
 import {
   projects as projectsApi,
@@ -11,6 +11,7 @@ import {
   pricing as pricingApi,
   exportApi,
   plan as planApi,
+  generation as generationApi,
 } from "@/lib/api";
 import type {
   Project,
@@ -48,6 +49,35 @@ export default function ProjectDetailPage() {
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [uploadContext, setUploadContext] = useState("");
+  const [generationPolling, setGenerationPolling] = useState(false);
+  const pollingRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Polling for generation status
+  useEffect(() => {
+    if (generationPolling) {
+      pollingRef.current = setInterval(async () => {
+        try {
+          const data: any = await projectsApi.get(projectId);
+          setProject(data);
+          if (data.processing_status !== "processing") {
+            setGenerationPolling(false);
+            // Refresh document list to show generated files
+            loadDocuments();
+          }
+        } catch {}
+      }, 3000);
+    }
+    return () => {
+      if (pollingRef.current) clearInterval(pollingRef.current);
+    };
+  }, [generationPolling, projectId]);
+
+  // Start polling if project is already processing on load
+  useEffect(() => {
+    if (project?.processing_status === "processing") {
+      setGenerationPolling(true);
+    }
+  }, [project?.processing_status]);
 
   useEffect(() => {
     loadProject();
@@ -143,28 +173,16 @@ export default function ProjectDetailPage() {
     },
   });
 
-  async function handleParseAll() {
-    setActionLoading("parse");
+  async function handleGenerateWinPlanAndAnswer() {
+    // Save context first
     try {
-      for (const doc of documents.filter((d) => d.status === "uploaded")) {
-        await documentsApi.parse(doc.id);
-      }
-      loadDocuments();
-    } catch (err: any) {
-      alert(err.message);
-    } finally {
-      setActionLoading(null);
-    }
-  }
+      await projectsApi.update(projectId, { upload_context: uploadContext });
+    } catch {}
 
-  async function handleExtract() {
-    setActionLoading("extract");
+    setActionLoading("generate-full");
     try {
-      const result: any = await requirementsApi.extract(projectId);
-      alert(result.message);
-      setActiveTab("requirements");
-      loadRequirements();
-      loadProject();
+      await generationApi.trigger(projectId);
+      setGenerationPolling(true);
     } catch (err: any) {
       alert(err.message);
     } finally {
@@ -330,21 +348,83 @@ export default function ProjectDetailPage() {
             </p>
           </div>
 
-          {/* Action Buttons */}
+          {/* Generation Status Banner */}
+          {project.processing_status === "processing" && (
+            <div className="mb-6 bg-blue-50 border border-blue-200 rounded-lg p-4 flex items-center gap-3">
+              <svg className="animate-spin h-5 w-5 text-blue-600 flex-shrink-0" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+              </svg>
+              <div>
+                <p className="text-sm font-medium text-blue-800">Generation in progress...</p>
+                <p className="text-xs text-blue-600 mt-0.5">{project.processing_message || "Processing your documents"}</p>
+              </div>
+            </div>
+          )}
+
+          {project.processing_status === "completed" && (
+            <div className="mb-6 bg-green-50 border border-green-200 rounded-lg p-4 flex items-center gap-3">
+              <svg className="h-5 w-5 text-green-600 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <div>
+                <p className="text-sm font-medium text-green-800">Generation complete!</p>
+                <p className="text-xs text-green-600 mt-0.5">{project.processing_message || "Documents generated successfully"}</p>
+              </div>
+              <button
+                onClick={() => projectsApi.update(projectId, { processing_status: null, processing_message: null }).then(loadProject)}
+                className="ml-auto text-green-600 hover:text-green-800 text-xs underline"
+              >
+                Dismiss
+              </button>
+            </div>
+          )}
+
+          {project.processing_status === "failed" && (
+            <div className="mb-6 bg-red-50 border border-red-200 rounded-lg p-4 flex items-center gap-3">
+              <svg className="h-5 w-5 text-red-600 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <div>
+                <p className="text-sm font-medium text-red-800">Generation failed</p>
+                <p className="text-xs text-red-600 mt-0.5">{project.processing_message || "An error occurred"}</p>
+              </div>
+              <button
+                onClick={() => projectsApi.update(projectId, { processing_status: null, processing_message: null }).then(loadProject)}
+                className="ml-auto text-red-600 hover:text-red-800 text-xs underline"
+              >
+                Dismiss
+              </button>
+            </div>
+          )}
+
+          {/* Action Button */}
           <div className="flex gap-3 mb-6">
             <button
-              onClick={handleParseAll}
-              disabled={!!actionLoading || documents.filter((d) => d.status === "uploaded").length === 0}
-              className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 text-sm font-medium disabled:opacity-50"
+              onClick={handleGenerateWinPlanAndAnswer}
+              disabled={
+                !!actionLoading ||
+                documents.length === 0 ||
+                project.processing_status === "processing"
+              }
+              className="bg-indigo-600 text-white px-5 py-2.5 rounded-lg hover:bg-indigo-700 text-sm font-medium disabled:opacity-50 flex items-center gap-2 transition"
             >
-              {actionLoading === "parse" ? "Parsing..." : "Parse All Documents"}
-            </button>
-            <button
-              onClick={handleExtract}
-              disabled={!!actionLoading || documents.filter((d) => d.status === "parsed").length === 0}
-              className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 text-sm font-medium disabled:opacity-50"
-            >
-              {actionLoading === "extract" ? "Extracting..." : "Extract Requirements"}
+              {actionLoading === "generate-full" || project.processing_status === "processing" ? (
+                <>
+                  <svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                  Processing...
+                </>
+              ) : (
+                <>
+                  <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                  </svg>
+                  Generate Win Plan & Answer RFP/RFI
+                </>
+              )}
             </button>
           </div>
 

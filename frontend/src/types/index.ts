@@ -21,6 +21,9 @@ export interface Project {
   document_count: number;
   requirement_count: number;
   response_count: number;
+  processing_status: string | null;
+  processing_message: string | null;
+  processing_started_at: string | null;
 }
 
 export interface Document {

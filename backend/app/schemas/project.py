@@ -21,6 +21,8 @@ class ProjectUpdate(BaseModel):
     industry: str | None = None
     status: str | None = None
     deadline: datetime | None = None
+    processing_status: str | None = None
+    processing_message: str | None = None
 
 
 class ProjectResponse(BaseModel):
@@ -38,6 +40,9 @@ class ProjectResponse(BaseModel):
     document_count: int = 0
     requirement_count: int = 0
     response_count: int = 0
+    processing_status: str | None = None
+    processing_message: str | None = None
+    processing_started_at: datetime | None = None
 
     model_config = {"from_attributes": True}
 

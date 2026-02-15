@@ -155,3 +155,9 @@ export const plan = {
   generate: (projectId: string) =>
     request(`/api/projects/${projectId}/plan/generate`, { method: "POST" }),
 };
+
+// Generation Pipeline
+export const generation = {
+  trigger: (projectId: string) =>
+    request(`/api/projects/${projectId}/generate-full`, { method: "POST" }),
+};
