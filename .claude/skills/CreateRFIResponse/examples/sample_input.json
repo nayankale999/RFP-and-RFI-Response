@@ -1,0 +1,151 @@
+{
+  "client_name": "Development Bank of Wales",
+  "solution_name": "IBM OpenPages SaaS Solution",
+  "rfi_description": "RFI for Risk Management Solution",
+  "prepared_for": "ATRadius",
+  "date_prepared": "19/09/2023",
+  "company": {
+    "name": "Bowmen Group Ltd.",
+    "address_line1": "2nd Floor, 4 Beaconsfield Road",
+    "address_line2": "St Albans, Hertfordshire AL1 3RD",
+    "city": "St Albans",
+    "state": "Hertfordshire",
+    "zip": "AL1 3RD",
+    "country": "United Kingdom",
+    "contact_name": "Nayan Kale",
+    "contact_title": "Senior Consultant",
+    "contact_phone": "+44 (0) 1234 567890",
+    "contact_email": "nayan.kale@bowmengroup.com",
+    "website": "https://www.bowmengroup.com"
+  },
+  "cover_page": {
+    "background_color": "#1B3A5C",
+    "background_image_path": null,
+    "title_text": null,
+    "subtitle_text": null
+  },
+  "revision_history": [
+    {
+      "version": "1.0",
+      "date": "9/05/2024",
+      "author": "Stuart Scott, Nayan Kale",
+      "approver": "Jayakumar Aravind (Bowmen Group), Lawrence Sinton (IBM)",
+      "description": "Final"
+    }
+  ],
+  "sections": {
+    "executive_summary": {
+      "paragraphs": [
+        "Development Bank of Wales (DBW) was launched in 2017 as part of the Welsh Government's commitment to economic development in Wales. DBW provides loans, mezzanine finance, and equity investment to businesses, supporting sustainable economic growth across the region.",
+        "DBW's current risk management software contract expires in February 2025. As a growing financial institution, DBW manages over 450 risks and 1000 controls across its expanding business units. The need for a modern, scalable risk management platform has become critical to supporting their continued growth and regulatory compliance obligations.",
+        "We are pleased to present IBM OpenPages with Watson as our proposed risk management solution for DBW. OpenPages provides a comprehensive, AI-powered Governance, Risk and Compliance (GRC) platform that addresses DBW's current and future risk management needs."
+      ],
+      "bullet_points": [
+        "Zero-training Task Based UI for immediate user adoption",
+        "Cognos reporting engine for advanced business analytics",
+        "Operational Risk Management (ORM) module",
+        "Key Risk Indicators (KRI) monitoring and alerting",
+        "Risk Event Management and incident tracking",
+        "Action Tracking with workflow automation",
+        "Modular platform with 11+ modules covering DORA, Compliance & Audit, Model Risk Management, ESG, Data Privacy, and Financial Controls Management"
+      ]
+    },
+    "company_profile": {
+      "description": "Bowmen Group, formed in 2015, specialises exclusively in the implementation and optimisation of IBM OpenPages GRC solutions. Our team of consultants includes former Senior IBM OpenPages Professional Services team members from the Netherlands, United Kingdom, and India, bringing an average of 12+ years of hands-on OpenPages experience to every engagement.",
+      "credentials": [
+        "Gartner Peer Insights Customer Choice Award",
+        "Risk Market Technology Awards 2021",
+        "reddot Design Award winner 2021"
+      ],
+      "certifications": [
+        "IBM recognised as Leader in Chartis RiskTech Quadrant 2023",
+        "IDC MarketScape: Third Party Risk Management 2022",
+        "Gartner Magic Quadrant for IT Risk Management 2021",
+        "The Forrester Wave: Governance, Risk and Compliance Platforms Q3 2021"
+      ],
+      "experience_highlights": [
+        "Extensive experience implementing OpenPages for financial institutions across Europe",
+        "Deep expertise in regulatory compliance frameworks including DORA, Basel III, and Solvency II",
+        "Proven track record of successful GRC platform deployments for organisations of all sizes"
+      ],
+      "hyperlinks": [
+        {
+          "text": "Visit our website",
+          "url": "https://www.bowmengroup.com"
+        }
+      ]
+    },
+    "solution_profile": {
+      "overview": "IBM OpenPages with Watson is a market-leading AI-powered GRC platform that provides organisations with a unified approach to managing governance, risk, and compliance. Built on a flexible, modular architecture, OpenPages enables organisations to start with their most pressing GRC needs and expand over time.",
+      "features": [
+        {
+          "name": "Common Library",
+          "description": "Unlimited entity, process, risk, and control hierarchies enabling comprehensive organisational modelling and risk taxonomy management."
+        },
+        {
+          "name": "Business Analytics and Intelligence",
+          "description": "Dynamic dashboards with drill-down capabilities, powered by IBM Cognos Analytics for predictive insights and real-time reporting."
+        },
+        {
+          "name": "GRC Workflow Designer",
+          "description": "Drag-and-drop workflow designer with out-of-the-box use cases for rapid deployment and customisation without coding."
+        },
+        {
+          "name": "Zero-Training UI",
+          "description": "Task-based user interface designed for immediate adoption, reducing training costs and accelerating time-to-value."
+        },
+        {
+          "name": "AI Capabilities",
+          "description": "50+ language translation, virtual assistant for guided navigation, and AI-powered risk insights using Watson technology."
+        },
+        {
+          "name": "Integration Framework",
+          "description": "Comprehensive REST API framework for third-party system integration, enabling seamless data exchange with existing enterprise applications."
+        }
+      ]
+    },
+    "technical_information": {
+      "content": "For detailed requirements mapping and technical capabilities assessment, please refer to the attached Excel document which provides a comprehensive response to all RFI requirements.",
+      "attached_documents": [
+        "DBW - Risk Management RFI Requirements.xlsx"
+      ]
+    }
+  },
+  "appendices": [
+    {
+      "label": "Appendix A",
+      "filename": "Bowmen Group Brief.pdf",
+      "description": "Company overview and capabilities"
+    },
+    {
+      "label": "Appendix B",
+      "filename": "OpenPages SaaS Security & Architecture.pdf",
+      "description": "Security architecture and SaaS deployment details"
+    },
+    {
+      "label": "Appendix C",
+      "filename": "IBM OpenPages Solutions Brief.pdf",
+      "description": "Product overview and feature summary"
+    },
+    {
+      "label": "Appendix D",
+      "filename": "IT Risk Management MQ - 2021.pdf",
+      "description": "Gartner Magic Quadrant analysis"
+    },
+    {
+      "label": "Appendix E",
+      "filename": "The Forrester Wave Governance, Risk And Compliance Platforms Q3 2021.pdf",
+      "description": "Forrester Wave analysis"
+    },
+    {
+      "label": "Appendix F",
+      "filename": "Chartis_RiskTech100 2023.pdf",
+      "description": "Chartis RiskTech100 ranking"
+    }
+  ],
+  "copyright": {
+    "year": "2024",
+    "company_name": "Bowmen Group Ltd.",
+    "notice_text": "This document and its contents are confidential and proprietary to Bowmen Group Ltd. No part of this document may be reproduced, distributed, or transmitted in any form without the prior written permission of Bowmen Group Ltd."
+  }
+}

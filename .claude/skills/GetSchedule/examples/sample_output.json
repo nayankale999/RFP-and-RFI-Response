@@ -1,0 +1,80 @@
+{
+  "document": "RFP_GRC_Oct2024.pdf",
+  "extracted_at": "2024-10-17T10:30:00",
+  "source_section": "Section 4.4 Planning",
+  "additional_notes": "The timetable above is indicative. IDEMIA reserves the right to modify it at any time.",
+  "events": [
+    {
+      "event_type": "rfp_release",
+      "event_name": "Send RFP by IDEMIA",
+      "date": "2024-10-16",
+      "date_type": "exact",
+      "is_deadline": false,
+      "notes": ""
+    },
+    {
+      "event_type": "intention_to_respond",
+      "event_name": "Reply intention to respond",
+      "date": "2024-10-18",
+      "date_type": "exact",
+      "is_deadline": true,
+      "notes": "Suppliers must confirm receipt and intention to respond"
+    },
+    {
+      "event_type": "submission_deadline",
+      "event_name": "Send Proposal to IDEMIA",
+      "date": "2024-11-01",
+      "date_type": "exact",
+      "is_deadline": true,
+      "notes": "Submit to grc-project@idemia.com"
+    },
+    {
+      "event_type": "shortlist_notification",
+      "event_name": "Inform supplier on initial selection for PoC",
+      "date": "2024-11-08",
+      "date_type": "exact",
+      "is_deadline": true,
+      "notes": "At most 2 suppliers selected for PoC"
+    },
+    {
+      "event_type": "poc_start",
+      "event_name": "Start PoC",
+      "date": "2024-11-16",
+      "date_type": "exact",
+      "is_deadline": false,
+      "notes": "Proof of Concept phase begins"
+    },
+    {
+      "event_type": "poc_end",
+      "event_name": "End PoC",
+      "date": "2024-11-29",
+      "date_type": "exact",
+      "is_deadline": true,
+      "notes": "Proof of Concept phase ends"
+    },
+    {
+      "event_type": "selection_decision",
+      "event_name": "Selection of GRC Solution",
+      "date": "Week 49",
+      "date_type": "week_number",
+      "is_deadline": true,
+      "notes": "Approximately December 2-6, 2024"
+    },
+    {
+      "event_type": "contracting",
+      "event_name": "Contracting",
+      "date": "Week 50",
+      "date_type": "week_number",
+      "is_deadline": false,
+      "notes": "Approximately December 9-13, 2024"
+    },
+    {
+      "event_type": "implementation_start",
+      "event_name": "Implementation start",
+      "date": "Week 51",
+      "date_type": "week_number",
+      "is_deadline": true,
+      "notes": "December 16, 2024 and further"
+    }
+  ]
+}

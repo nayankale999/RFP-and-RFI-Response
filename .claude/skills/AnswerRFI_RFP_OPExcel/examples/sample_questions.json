@@ -1,0 +1,63 @@
+{
+  "file": "Example_RFP_GRC_Questionnaire.xlsx",
+  "file_path": "/path/to/Example_RFP_GRC_Questionnaire.xlsx",
+  "extracted_at": "2026-02-15T10:30:00",
+  "sheets": {
+    "D. Functional Requirements": {
+      "structure": {
+        "id_col": "A",
+        "question_col": "B",
+        "response_col": "D",
+        "score_col": "C"
+      },
+      "total_questions": 4,
+      "categories": ["Role Based Access", "Reporting"],
+      "questions": [
+        {
+          "row": 7,
+          "id": "D.1",
+          "category": "Role Based Access",
+          "question": "The system supports role-based access control (RBAC) with granular permissions at field level.",
+          "additional_info": "",
+          "question_type": "binary",
+          "current_response": "",
+          "response_col_letter": "D",
+          "score_col_letter": "C"
+        },
+        {
+          "row": 8,
+          "id": "D.2",
+          "category": "Role Based Access",
+          "question": "The system supports Single Sign-On (SSO) via SAML 2.0 and integrates with LDAP/Active Directory.",
+          "additional_info": "",
+          "question_type": "binary",
+          "current_response": "",
+          "response_col_letter": "D",
+          "score_col_letter": "C"
+        },
+        {
+          "row": 15,
+          "id": "D.8",
+          "category": "Reporting",
+          "question": "Describe the reporting capabilities including out-of-box reports and custom report creation.",
+          "additional_info": "",
+          "question_type": "narrative",
+          "current_response": "",
+          "response_col_letter": "D",
+          "score_col_letter": "C"
+        },
+        {
+          "row": 16,
+          "id": "D.9",
+          "category": "Reporting",
+          "question": "The system supports dashboard creation with configurable widgets and drill-down capabilities.",
+          "additional_info": "",
+          "question_type": "binary",
+          "current_response": "",
+          "response_col_letter": "D",
+          "score_col_letter": "C"
+        }
+      ]
+    }
+  }
+}
