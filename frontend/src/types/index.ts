@@ -10,6 +10,7 @@ export interface Project {
   id: string;
   name: string;
   description: string | null;
+  upload_context: string | null;
   status: string;
   client_name: string | null;
   industry: string | null;

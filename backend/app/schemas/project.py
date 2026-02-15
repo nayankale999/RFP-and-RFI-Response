@@ -7,6 +7,7 @@ from pydantic import BaseModel, Field
 class ProjectCreate(BaseModel):
     name: str = Field(..., min_length=1, max_length=500)
     description: str | None = None
+    upload_context: str | None = None
     client_name: str | None = None
     industry: str | None = None
     deadline: datetime | None = None
@@ -15,6 +16,7 @@ class ProjectCreate(BaseModel):
 class ProjectUpdate(BaseModel):
     name: str | None = None
     description: str | None = None
+    upload_context: str | None = None
     client_name: str | None = None
     industry: str | None = None
     status: str | None = None
@@ -25,6 +27,7 @@ class ProjectResponse(BaseModel):
     id: uuid.UUID
     name: str
     description: str | None
+    upload_context: str | None = None
     status: str
     client_name: str | None
     industry: str | None

@@ -47,6 +47,7 @@ export default function ProjectDetailPage() {
   const [activeTab, setActiveTab] = useState<Tab>("documents");
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const [uploadContext, setUploadContext] = useState("");
 
   useEffect(() => {
     loadProject();
@@ -64,6 +65,7 @@ export default function ProjectDetailPage() {
     try {
       const data: any = await projectsApi.get(projectId);
       setProject(data);
+      setUploadContext(data.upload_context || "");
     } catch {
     } finally {
       setLoading(false);
@@ -103,6 +105,13 @@ export default function ProjectDetailPage() {
     try {
       const data: any = await pricingApi.list(projectId);
       setPricingItems(Array.isArray(data) ? data : []);
+    } catch {}
+  }
+
+  // Save upload context on blur
+  async function saveUploadContext() {
+    try {
+      await projectsApi.update(projectId, { upload_context: uploadContext });
     } catch {}
   }
 
@@ -301,6 +310,24 @@ export default function ProjectDetailPage() {
                 <p className="text-sm text-gray-400 mt-1">PDF, DOCX, XLSX, CSV, PPTX</p>
               </div>
             )}
+          </div>
+
+          {/* Context Text Box */}
+          <div className="mb-6">
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              File Context & Instructions
+            </label>
+            <textarea
+              value={uploadContext}
+              onChange={(e) => setUploadContext(e.target.value)}
+              onBlur={saveUploadContext}
+              placeholder="Provide context about uploaded files — e.g., which Excel tabs/sheets contain the questions to answer, which documents describe the RFP scope, etc."
+              rows={3}
+              className="w-full border border-gray-300 rounded-lg px-4 py-3 text-sm text-gray-700 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent resize-y"
+            />
+            <p className="text-xs text-gray-400 mt-1">
+              This context helps guide AI processing of your documents. Auto-saved when you click away.
+            </p>
           </div>
 
           {/* Action Buttons */}
