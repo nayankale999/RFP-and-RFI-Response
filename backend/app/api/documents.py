@@ -1,6 +1,8 @@
+import logging
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
+from fastapi.responses import Response as FastAPIResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -13,6 +15,8 @@ from app.schemas.document import DocumentResponse, DocumentListResponse, Documen
 from app.documents.parsers.factory import get_parser_factory
 from app.shared.storage import get_storage_client
 from app.config import get_settings
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api", tags=["documents"])
 
@@ -190,3 +194,63 @@ async def get_document_status(
         page_count=doc.page_count,
         error_message=doc.error_message,
     )
+
+
+@router.get("/documents/{document_id}/download")
+async def download_document(
+    document_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Download a document file from storage."""
+    result = await db.execute(select(Document).where(Document.id == document_id))
+    doc = result.scalar_one_or_none()
+    if not doc:
+        raise HTTPException(status_code=404, detail="Document not found")
+
+    try:
+        storage = get_storage_client()
+        file_data = storage.download_file(doc.file_path)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to download file: {e}")
+
+    # Determine content type
+    content_types = {
+        "pdf": "application/pdf",
+        "docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        "xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        "csv": "text/csv",
+        "pptx": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+    }
+    content_type = content_types.get(doc.file_type, "application/octet-stream")
+
+    return FastAPIResponse(
+        content=file_data,
+        media_type=content_type,
+        headers={
+            "Content-Disposition": f'attachment; filename="{doc.filename}"',
+        },
+    )
+
+
+@router.delete("/documents/{document_id}", status_code=204)
+async def delete_document(
+    document_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Delete a document and its file from storage."""
+    result = await db.execute(select(Document).where(Document.id == document_id))
+    doc = result.scalar_one_or_none()
+    if not doc:
+        raise HTTPException(status_code=404, detail="Document not found")
+
+    # Delete file from S3 (best-effort — DB record deleted even if S3 fails)
+    try:
+        storage = get_storage_client()
+        storage.delete_file(doc.file_path)
+    except Exception as e:
+        logger.warning(f"Failed to delete S3 file {doc.file_path}: {e}")
+
+    # Delete from database
+    await db.delete(doc)

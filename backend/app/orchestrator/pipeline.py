@@ -15,7 +15,7 @@ import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import async_session
@@ -26,8 +26,10 @@ from app.shared.storage import get_storage_client
 
 logger = logging.getLogger(__name__)
 
-# Skill script paths
-SKILLS_DIR = Path(__file__).parent.parent.parent.parent / ".claude" / "skills"
+# Skill script paths — Docker mounts to /app/skills, fallback for local dev
+_DOCKER_SKILLS = Path("/app/skills")
+_LOCAL_SKILLS = Path(__file__).parent.parent.parent.parent / ".claude" / "skills"
+SKILLS_DIR = _DOCKER_SKILLS if _DOCKER_SKILLS.exists() else _LOCAL_SKILLS
 EXTRACT_SCHEDULE_SCRIPT = SKILLS_DIR / "GetSchedule" / "scripts" / "extract_schedule.py"
 GENERATE_WIN_PLAN_SCRIPT = SKILLS_DIR / "GetSchedule" / "scripts" / "generate_win_plan.py"
 PARSE_EXCEL_SCRIPT = SKILLS_DIR / "AnswerRFI_RFP_OPExcel" / "scripts" / "parse_excel_rfp.py"
@@ -72,15 +74,20 @@ class UploadContextParser:
         if not context:
             return result
 
-        # Extract sheet/tab names
+        # Extract sheet/tab names — conservative patterns only.
+        # We rely on auto-detect as fallback, so only match high-confidence patterns
+        # to avoid capturing junk like "tab of the excel file..."
         sheet_patterns = [
-            r"(?:sheet|tab|worksheet)\s*[:\-]?\s*[\"']?([^\"'\n,]+)[\"']?",
-            r"[\"']([^\"']+)[\"']\s*(?:sheet|tab)",
-            r"(?:focus on|answer)\s+(?:sheet|tab)?\s*[\"']?([^\"'\n,]+)[\"']?",
+            r'(?:sheet|tab|worksheet)\s*[:\-]?\s*["\']([^"\']+)["\']',     # tab: "Name" or tab "Name"
+            r'["\']([^"\']{1,60})["\']\s*(?:sheet|tab|worksheet)',          # "Name" tab
+            r'(?:sheet|tab|worksheet)\s*[:\-]\s*([A-Za-z0-9][A-Za-z0-9 _\-]{0,50}?)(?:\s*[,.\n]|\s+(?:of|in|from|for|the|and|to|has|is|please|with)\b|$)',  # sheet: Name (explicit colon/dash separator only)
         ]
         for pattern in sheet_patterns:
             matches = re.findall(pattern, context, re.IGNORECASE)
-            result["sheet_names"].extend([m.strip() for m in matches if m.strip()])
+            for m in matches:
+                cleaned = m.strip()
+                if cleaned and len(cleaned) <= 60:
+                    result["sheet_names"].append(cleaned)
 
         # Extract client name
         client_match = re.search(r"(?:client|company|vendor|for)\s*[:\-]?\s*[\"']?([A-Z][a-zA-Z\s&]+)", context)
@@ -117,7 +124,13 @@ class GenerationPipeline:
                     raise ValueError(f"Project {self.project_id} not found")
 
                 result = await db.execute(
-                    select(Document).where(Document.project_id == self.project_id)
+                    select(Document).where(
+                        Document.project_id == self.project_id,
+                        or_(
+                            Document.doc_category.is_(None),
+                            Document.doc_category != "generated_output",
+                        ),
+                    )
                 )
                 documents = result.scalars().all()
 
@@ -209,28 +222,55 @@ class GenerationPipeline:
         return local_files
 
     def _run_schedule_extraction(self, file_path: str) -> dict | None:
-        """Extract schedule from a PDF/DOCX file using extract_schedule.py."""
+        """Extract schedule from a PDF/DOCX file using extract_schedule.py with Claude AI.
+
+        Runs the full AI extraction (NOT --parse-only) so Claude identifies
+        structured schedule events with dates, deadlines, and milestones.
+        """
         if not EXTRACT_SCHEDULE_SCRIPT.exists():
             logger.warning(f"Schedule extraction script not found: {EXTRACT_SCHEDULE_SCRIPT}")
             return None
 
+        # AI extraction writes structured JSON to an output file
+        schedule_output = self.temp_dir / "extracted_schedule.json"
+
         try:
+            import os as _os
+            from app.config import get_settings
+            settings = get_settings()
+
+            env = _os.environ.copy()
+            # Ensure ANTHROPIC_API_KEY is available for the subprocess
+            if settings.anthropic_api_key:
+                env["ANTHROPIC_API_KEY"] = settings.anthropic_api_key
+
+            if not env.get("ANTHROPIC_API_KEY"):
+                logger.warning("ANTHROPIC_API_KEY not set — cannot run AI schedule extraction")
+                return None
+
             result = subprocess.run(
-                ["python3", str(EXTRACT_SCHEDULE_SCRIPT), "--input", file_path, "--parse-only"],
+                [
+                    "python3", str(EXTRACT_SCHEDULE_SCRIPT),
+                    "--input", file_path,
+                    "--format", "json",
+                    "--output", str(schedule_output),
+                ],
                 capture_output=True,
                 text=True,
-                timeout=120,
+                timeout=180,  # AI extraction takes longer than raw parsing
                 cwd=str(SKILLS_DIR / "GetSchedule" / "scripts"),
+                env=env,
             )
-            if result.returncode == 0 and result.stdout.strip():
-                parsed = json.loads(result.stdout)
-                logger.info(f"Schedule extraction: parsed document text ({len(parsed.get('text', ''))} chars)")
+            if result.returncode == 0 and schedule_output.exists():
+                parsed = json.loads(schedule_output.read_text())
+                event_count = len(parsed.get("schedule_events", []))
+                logger.info(f"Schedule extraction: found {event_count} events via AI")
                 return parsed
             else:
                 logger.warning(f"Schedule extraction returned code {result.returncode}: {result.stderr[:500]}")
                 return None
         except subprocess.TimeoutExpired:
-            logger.warning("Schedule extraction timed out")
+            logger.warning("Schedule extraction timed out (AI extraction)")
             return None
         except Exception as e:
             logger.warning(f"Schedule extraction failed: {e}")
@@ -245,12 +285,49 @@ class GenerationPipeline:
         # Write schedule data to temp file
         schedule_file = self.temp_dir / "schedule_data.json"
 
-        # Structure data as the script expects
-        plan_data = {
-            "events": schedule_json.get("events", schedule_json.get("schedule_events", [])),
-            "client_name": context_info.get("client_name", ""),
-            "document_name": schedule_json.get("filename", "RFP Document"),
-        }
+        # Start from the AI extraction result which contains schedule_events,
+        # source_section, additional_notes, document, extracted_at, etc.
+        # Add/override with context info for the Win Plan
+        plan_data = dict(schedule_json)  # Copy all fields from AI extraction
+        plan_data["events"] = schedule_json.get("schedule_events", schedule_json.get("events", []))
+        plan_data["client_name"] = context_info.get("client_name", plan_data.get("client_name", ""))
+        plan_data["rfp_title"] = plan_data.get("document", schedule_json.get("filename", "RFP Document"))
+
+        # IBM OpenPages solution data for the Win Strategy section
+        plan_data["solution_name"] = "IBM OpenPages"
+        plan_data["solution_overview"] = (
+            "IBM OpenPages is an AI-powered, integrated GRC platform that provides a single "
+            "environment to identify, manage, monitor, and report on risk and regulatory compliance. "
+            "Key modules include Operational Risk Management, Regulatory Compliance Management, "
+            "Policy & Document Management, Internal Audit Management, Third-Party Risk Management, "
+            "Financial Controls, IT Governance, and Model Risk Governance."
+        )
+        plan_data["differentiators"] = [
+            "Unified GRC platform with 8+ integrated modules — eliminates siloed point solutions",
+            "AI-powered insights via Watson / watsonx.ai for predictive risk analytics",
+            "Built on IBM Cloud Pak for Data / watsonx platform for enterprise scalability",
+            "Highly configurable workflows, forms, and dashboards without custom development",
+            "Flexible deployment: SaaS, on-premises (Red Hat OpenShift), or hybrid",
+        ]
+        plan_data["competitive_advantages"] = [
+            "Gartner Magic Quadrant Leader for Integrated Risk Management",
+            "12,000+ GRC implementations globally across Fortune 500 and regulated industries",
+            "SOC 2 Type II, ISO 27001, FedRAMP Authorized, ISO 22301 certified",
+            "REST APIs, SSO/SAML, LDAP/AD, and RBAC for seamless enterprise integration",
+            "Supports Basel III/IV, SOX, GDPR, DORA, CCPA and more",
+        ]
+        plan_data["risk_areas"] = [
+            "Pricing competitiveness vs lower-cost niche tools",
+            "Implementation timeline for full platform deployment",
+            "Client-specific customization scope for highly regulated clients",
+            "Competitor incumbency — migration cost if client has an existing GRC tool",
+        ]
+        plan_data["win_themes"] = [
+            "One platform, total visibility: Consolidate fragmented GRC into unified enterprise-wide insight",
+            "AI-driven risk intelligence: Move from reactive compliance to predictive risk management with Watson/watsonx.ai",
+            "Proven at scale: 12,000+ implementations and regulatory certifications de-risk the buying decision",
+        ]
+
         schedule_file.write_text(json.dumps(plan_data, indent=2))
 
         try:
@@ -287,57 +364,117 @@ class GenerationPipeline:
         context_info: dict,
         upload_context: str,
     ):
-        """Parse Excel RFP, generate AI answers, write back."""
+        """Parse Excel RFP, generate AI answers, write back.
+
+        Two-step approach:
+        1. Call --parse-only (no --sheets) to discover which sheets have questions
+        2. Call --parse-only --sheets "X,Y" to extract actual questions
+        3. Generate AI answers
+        4. Write back via --write-answers
+        """
         if not PARSE_EXCEL_SCRIPT.exists():
             logger.warning(f"Excel parser script not found: {PARSE_EXCEL_SCRIPT}")
             return
 
-        # Step 1: Parse questions from Excel
-        parse_cmd = [
-            "python3", str(PARSE_EXCEL_SCRIPT),
-            "--input", xlsx_path,
-            "--parse-only",
-        ]
-        if context_info.get("sheet_names"):
-            parse_cmd.extend(["--sheets", ",".join(context_info["sheet_names"])])
+        cwd = str(SKILLS_DIR / "AnswerRFI_RFP_OPExcel" / "scripts")
+
+        # Step 1: Always auto-detect sheets with questions first, then apply user filter
+        user_specified_sheets = context_info.get("sheet_names", [])
+        auto_detected_sheets: list[str] = []
 
         try:
             result = subprocess.run(
-                parse_cmd,
-                capture_output=True,
-                text=True,
-                timeout=120,
-                cwd=str(SKILLS_DIR / "AnswerRFI_RFP_OPExcel" / "scripts"),
+                ["python3", str(PARSE_EXCEL_SCRIPT), "--input", xlsx_path, "--parse-only"],
+                capture_output=True, text=True, timeout=120, cwd=cwd,
             )
             if result.returncode != 0:
-                logger.warning(f"Excel parsing failed: {result.stderr[:500]}")
+                logger.warning(f"Excel sheet listing failed: {result.stderr[:500]}")
+                return
+
+            listing = json.loads(result.stdout)
+            sheets_list = listing.get("sheets", [])
+
+            # sheets_list is an array of {name, question_count, ...}
+            for s in sheets_list:
+                qcount = s.get("question_count", 0)
+                name = s.get("name", "")
+                if qcount > 0 and name:
+                    auto_detected_sheets.append(name)
+                    logger.info(f"Auto-detected sheet '{name}' with {qcount} questions")
+
+        except Exception as e:
+            logger.warning(f"Excel sheet discovery failed: {e}")
+            return
+
+        if not auto_detected_sheets:
+            logger.info("No sheets with questions found in Excel file")
+            return
+
+        # Apply user-specified sheet names as a filter (if any)
+        target_sheets = auto_detected_sheets  # default: use all auto-detected
+        if user_specified_sheets:
+            # Try matching user names against actual sheets (exact, case-insensitive, or substring)
+            matched: list[str] = []
+            for actual in auto_detected_sheets:
+                actual_lower = actual.lower()
+                for user_name in user_specified_sheets:
+                    user_lower = user_name.lower()
+                    if user_lower == actual_lower or user_lower in actual_lower or actual_lower in user_lower:
+                        matched.append(actual)
+                        break
+            if matched:
+                target_sheets = matched
+                logger.info(f"User filter matched sheets: {matched}")
+            else:
+                logger.warning(
+                    f"User-specified sheets {user_specified_sheets} didn't match any auto-detected "
+                    f"sheets {auto_detected_sheets} — falling back to all auto-detected sheets"
+                )
+
+        # Step 2: Extract actual questions from target sheets
+        logger.info(f"Extracting questions from sheets: {target_sheets}")
+        try:
+            result = subprocess.run(
+                [
+                    "python3", str(PARSE_EXCEL_SCRIPT),
+                    "--input", xlsx_path,
+                    "--parse-only",
+                    "--sheets", ",".join(target_sheets),
+                ],
+                capture_output=True, text=True, timeout=120, cwd=cwd,
+            )
+            if result.returncode != 0:
+                logger.warning(f"Excel question extraction failed: {result.stderr[:500]}")
                 return
 
             parsed_data = json.loads(result.stdout)
         except Exception as e:
-            logger.warning(f"Excel parsing failed: {e}")
+            logger.warning(f"Excel question extraction failed: {e}")
             return
 
-        # Check if we got sheets with questions
-        sheets = parsed_data.get("sheets", [])
-        if not sheets:
-            logger.info("No sheets with questions found")
+        # With --sheets, the output has sheets as a dict: {"SheetName": {structure, questions: [...]}}
+        sheets_dict = parsed_data.get("sheets", {})
+        if not sheets_dict:
+            logger.info("No questions extracted from sheets")
             return
 
-        # Step 2: Generate AI answers for each sheet
+        # Step 3: Generate AI answers for each sheet
         all_answers = []
-        for sheet in sheets:
-            questions = sheet.get("questions", [])
+        for sheet_name, sheet_data in sheets_dict.items():
+            questions = sheet_data.get("questions", [])
             if not questions:
                 continue
 
-            sheet_name = sheet.get("sheet_name", "Unknown")
-            structure = sheet.get("structure", {})
+            structure = sheet_data.get("structure", {})
             response_col = structure.get("response_col")
 
             if not response_col:
-                logger.warning(f"No response column detected for sheet '{sheet_name}'")
-                continue
+                # Try to get from question data
+                if questions and questions[0].get("response_col_letter"):
+                    response_col = questions[0]["response_col_letter"]
+                else:
+                    logger.warning(f"No response column detected for sheet '{sheet_name}'")
+                    continue
 
             logger.info(f"Generating answers for {len(questions)} questions in '{sheet_name}'")
 
@@ -353,9 +490,15 @@ class GenerationPipeline:
             logger.info("No answers generated for Excel file")
             return
 
-        # Step 3: Write answers back to Excel
+        # Step 4: Write answers back to Excel
+        # Group answers by sheet_name (AnswerWriter expects {"answers": {"SheetName": [...]}})
+        answers_by_sheet: dict[str, list] = {}
+        for ans in all_answers:
+            sname = ans.get("sheet_name", "Unknown")
+            answers_by_sheet.setdefault(sname, []).append(ans)
+
         answers_file = self.temp_dir / "answers.json"
-        answers_data = {"answers": all_answers}
+        answers_data = {"answers": answers_by_sheet}
         answers_file.write_text(json.dumps(answers_data, indent=2))
 
         try:

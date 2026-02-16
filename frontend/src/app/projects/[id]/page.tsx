@@ -52,20 +52,28 @@ export default function ProjectDetailPage() {
   const [generationPolling, setGenerationPolling] = useState(false);
   const pollingRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Polling for generation status
+  // Polling for generation status — uses raw fetch to avoid auto-redirect on 401
   useEffect(() => {
     if (generationPolling) {
       pollingRef.current = setInterval(async () => {
         try {
-          const data: any = await projectsApi.get(projectId);
+          const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
+          const headers: Record<string, string> = { "Content-Type": "application/json" };
+          if (token) headers["Authorization"] = `Bearer ${token}`;
+          const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+          const res = await fetch(`${API_BASE}/api/projects/${projectId}`, { headers });
+          if (!res.ok) return; // Silently skip — don't redirect on polling errors
+          const data = await res.json();
           setProject(data);
           if (data.processing_status !== "processing") {
             setGenerationPolling(false);
             // Refresh document list to show generated files
             loadDocuments();
           }
-        } catch {}
-      }, 3000);
+        } catch {
+          // Silently ignore polling errors
+        }
+      }, 5000);
     }
     return () => {
       if (pollingRef.current) clearInterval(pollingRef.current);
@@ -173,6 +181,30 @@ export default function ProjectDetailPage() {
     },
   });
 
+  async function handleDownloadDocument(docId: string, filename: string) {
+    try {
+      const blob = await documentsApi.download(docId);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (err: any) {
+      alert(`Download failed: ${err.message}`);
+    }
+  }
+
+  async function handleDeleteDocument(docId: string, filename: string) {
+    if (!confirm(`Delete "${filename}"? This cannot be undone.`)) return;
+    try {
+      await documentsApi.delete(docId);
+      setDocuments((prev) => prev.filter((d) => d.id !== docId));
+    } catch (err: any) {
+      alert(`Delete failed: ${err.message}`);
+    }
+  }
+
   async function handleGenerateWinPlanAndAnswer() {
     // Save context first
     try {
@@ -182,6 +214,10 @@ export default function ProjectDetailPage() {
     setActionLoading("generate-full");
     try {
       await generationApi.trigger(projectId);
+      // Optimistically show the processing banner immediately
+      setProject((prev) =>
+        prev ? { ...prev, processing_status: "processing", processing_message: "Initializing pipeline..." } : prev
+      );
       setGenerationPolling(true);
     } catch (err: any) {
       alert(err.message);
@@ -350,14 +386,27 @@ export default function ProjectDetailPage() {
 
           {/* Generation Status Banner */}
           {project.processing_status === "processing" && (
-            <div className="mb-6 bg-blue-50 border border-blue-200 rounded-lg p-4 flex items-center gap-3">
-              <svg className="animate-spin h-5 w-5 text-blue-600 flex-shrink-0" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-              </svg>
-              <div>
-                <p className="text-sm font-medium text-blue-800">Generation in progress...</p>
-                <p className="text-xs text-blue-600 mt-0.5">{project.processing_message || "Processing your documents"}</p>
+            <div className="mb-6 bg-blue-50 border border-blue-200 rounded-lg p-4">
+              <div className="flex items-center gap-3">
+                <svg className="animate-spin h-5 w-5 text-blue-600 flex-shrink-0" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                <div className="flex-1">
+                  <p className="text-sm font-medium text-blue-800">Generation in progress...</p>
+                  <p className="text-xs text-blue-600 mt-0.5">{project.processing_message || "Processing your documents"}</p>
+                </div>
+                {project.processing_started_at && (
+                  <span className="text-xs text-blue-500 flex-shrink-0">
+                    Started {new Date(project.processing_started_at).toLocaleTimeString()}
+                  </span>
+                )}
+              </div>
+              <div className="mt-3">
+                <div className="w-full bg-blue-200 rounded-full h-1.5">
+                  <div className="bg-blue-600 h-1.5 rounded-full animate-pulse" style={{ width: "60%" }}></div>
+                </div>
+                <p className="text-xs text-blue-500 mt-1.5">This may take 5-10 minutes depending on the number of questions.</p>
               </div>
             </div>
           )}
@@ -442,6 +491,7 @@ export default function ProjectDetailPage() {
                     <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase">Size</th>
                     <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase">Pages</th>
                     <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase">Status</th>
+                    <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase"></th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
@@ -458,6 +508,26 @@ export default function ProjectDetailPage() {
                         <span className={`px-2 py-1 rounded-full text-xs font-medium ${statusColor(doc.status)}`}>
                           {doc.status}
                         </span>
+                      </td>
+                      <td className="px-4 py-3 flex items-center space-x-2">
+                        <button
+                          onClick={() => handleDownloadDocument(doc.id, doc.filename)}
+                          className="text-primary-600 hover:text-primary-800 text-sm font-medium"
+                          title="Download file"
+                        >
+                          <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                          </svg>
+                        </button>
+                        <button
+                          onClick={() => handleDeleteDocument(doc.id, doc.filename)}
+                          className="text-red-500 hover:text-red-700 text-sm font-medium"
+                          title="Delete document"
+                        >
+                          <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                          </svg>
+                        </button>
                       </td>
                     </tr>
                   ))}

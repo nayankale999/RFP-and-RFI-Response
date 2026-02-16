@@ -122,7 +122,7 @@ class WinPlanGenerator:
         self._add_procurement_schedule(data)
         self._add_key_deadlines(data)
         self._add_response_team()
-        self._add_win_strategy()
+        self._add_win_strategy(data)
         self._add_action_items()
         self._add_notes()
         self._add_footer(data)
@@ -431,47 +431,82 @@ class WinPlanGenerator:
 
         self.doc.add_paragraph("")
 
-    def _add_win_strategy(self):
-        """Section: Win Strategy (placeholder with prompts)."""
+    def _add_win_strategy(self, data: dict):
+        """Section: Win Strategy — pre-filled with solution data when available."""
         add_heading_bar(self.doc, "Win Strategy")
 
-        prompts = [
+        # Solution overview paragraph (if provided)
+        solution_overview = data.get("solution_overview", "")
+        if solution_overview:
+            p = self.doc.add_paragraph()
+            run = p.add_run("Solution: ")
+            run.bold = True
+            run.font.size = Pt(11)
+            run.font.name = "Calibri"
+            run = p.add_run(data.get("solution_name", ""))
+            run.font.size = Pt(11)
+            run.font.name = "Calibri"
+            run.bold = True
+
+            p = self.doc.add_paragraph()
+            run = p.add_run(solution_overview)
+            run.font.size = Pt(10)
+            run.font.name = "Calibri"
+            self.doc.add_paragraph("")
+
+        # Each strategy section: render bullet list if data exists, else placeholder
+        sections = [
             (
                 "Key Differentiators",
+                "differentiators",
                 "What makes our solution uniquely suited for this client? List 3-5 differentiators.",
             ),
             (
                 "Competitive Advantages",
+                "competitive_advantages",
                 "How do we compare against likely competitors? What are our strengths?",
             ),
             (
                 "Client Pain Points",
+                None,
                 "What are the client's primary challenges? How does our solution address each one?",
             ),
             (
                 "Risk Areas",
+                "risk_areas",
                 "What could weaken our proposal? Pricing, experience gaps, technical gaps?",
             ),
             (
                 "Win Themes",
+                "win_themes",
                 "What 2-3 key messages should run throughout our response?",
             ),
         ]
 
-        for title, prompt in prompts:
+        for title, data_key, fallback_prompt in sections:
+            # Section title
             p = self.doc.add_paragraph()
             run = p.add_run(title)
             run.bold = True
             run.font.size = Pt(11)
             run.font.color.rgb = RGBColor(0x31, 0x46, 0x62)
 
-            p = self.doc.add_paragraph()
-            run = p.add_run(prompt)
-            run.font.size = Pt(10)
-            run.italic = True
-            run.font.color.rgb = RGBColor(0x99, 0x99, 0x99)
+            items = data.get(data_key, []) if data_key else []
+            if items and isinstance(items, list):
+                # Render as bullet points
+                for item in items:
+                    bp = self.doc.add_paragraph(style="List Bullet")
+                    run = bp.add_run(str(item))
+                    run.font.size = Pt(10)
+                    run.font.name = "Calibri"
+            else:
+                # Fallback: show placeholder prompt
+                p = self.doc.add_paragraph()
+                run = p.add_run(fallback_prompt)
+                run.font.size = Pt(10)
+                run.italic = True
+                run.font.color.rgb = RGBColor(0x99, 0x99, 0x99)
 
-            # Space for content
             self.doc.add_paragraph("")
 
         self.doc.add_paragraph("")

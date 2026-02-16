@@ -1,8 +1,9 @@
 import uuid
+import asyncio
 import logging
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -20,14 +21,16 @@ router = APIRouter(prefix="/api", tags=["generate"])
 
 async def _run_pipeline_background(project_id: uuid.UUID):
     """Background task to run the generation pipeline."""
-    pipeline = GenerationPipeline(project_id)
-    await pipeline.run()
+    try:
+        pipeline = GenerationPipeline(project_id)
+        await pipeline.run()
+    except Exception as e:
+        logger.exception(f"Pipeline background task failed: {e}")
 
 
 @router.post("/projects/{project_id}/generate-full")
 async def generate_full(
     project_id: uuid.UUID,
-    background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -63,10 +66,11 @@ async def generate_full(
     project.processing_status = "processing"
     project.processing_message = "Generation queued..."
     project.processing_started_at = datetime.now(timezone.utc)
-    await db.flush()
+    await db.commit()
 
-    # Launch background pipeline
-    background_tasks.add_task(_run_pipeline_background, project_id)
+    # Launch as async task on the event loop (not BackgroundTasks)
+    # This properly supports SQLAlchemy async sessions
+    asyncio.create_task(_run_pipeline_background(project_id))
 
     return {
         "message": "Generation started",

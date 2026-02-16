@@ -52,6 +52,7 @@ services:
       context: ./backend
       dockerfile: Dockerfile
     container_name: rfp_backend
+    env_file: .env
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
     environment:
       - DATABASE_URL=postgresql+asyncpg://rfp_user:${POSTGRES_PASSWORD:-rfp_dev_password}@postgres:5432/rfp_automation
@@ -59,13 +60,12 @@ services:
       - MINIO_ENDPOINT=minio:9000
       - MINIO_ACCESS_KEY=${MINIO_ROOT_USER:-minioadmin}
       - MINIO_SECRET_KEY=${MINIO_ROOT_PASSWORD:-minioadmin}
-      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
-      - VOYAGE_API_KEY=${VOYAGE_API_KEY}
       - JWT_SECRET=${JWT_SECRET:-dev-jwt-secret-change-in-production}
     ports:
       - "8000:8000"
     volumes:
       - ./backend:/app
+      - ./.claude/skills:/app/skills
     depends_on:
       postgres:
         condition: service_healthy
@@ -79,6 +79,7 @@ services:
       context: ./backend
       dockerfile: Dockerfile
     container_name: rfp_celery_worker
+    env_file: .env
     command: celery -A app.tasks.celery_app worker --loglevel=info --concurrency=4
     environment:
       - DATABASE_URL=postgresql+asyncpg://rfp_user:${POSTGRES_PASSWORD:-rfp_dev_password}@postgres:5432/rfp_automation
@@ -86,8 +87,6 @@ services:
       - MINIO_ENDPOINT=minio:9000
       - MINIO_ACCESS_KEY=${MINIO_ROOT_USER:-minioadmin}
       - MINIO_SECRET_KEY=${MINIO_ROOT_PASSWORD:-minioadmin}
-      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
-      - VOYAGE_API_KEY=${VOYAGE_API_KEY}
     volumes:
       - ./backend:/app
     depends_on:

@@ -107,6 +107,15 @@ export const documents = {
   parse: (documentId: string) =>
     request(`/api/documents/${documentId}/parse`, { method: "POST" }),
   status: (documentId: string) => request(`/api/documents/${documentId}/status`),
+  download: async (documentId: string): Promise<Blob> => {
+    const response = await fetch(`${API_BASE}/api/documents/${documentId}/download`, {
+      headers: getAuthHeader(),
+    });
+    if (!response.ok) throw new Error(`Download failed: HTTP ${response.status}`);
+    return response.blob();
+  },
+  delete: (documentId: string) =>
+    request(`/api/documents/${documentId}`, { method: "DELETE" }),
 };
 
 // Requirements

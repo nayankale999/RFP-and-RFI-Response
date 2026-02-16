@@ -32,6 +32,7 @@ async def create_project(
     )
     db.add(project)
     await db.flush()
+    await db.refresh(project)
     return ProjectResponse(
         id=project.id,
         name=project.name,
@@ -43,6 +44,9 @@ async def create_project(
         owner_id=project.owner_id,
         created_at=project.created_at,
         updated_at=project.updated_at,
+        processing_status=project.processing_status,
+        processing_message=project.processing_message,
+        processing_started_at=project.processing_started_at,
     )
 
 
@@ -86,6 +90,9 @@ async def list_projects(
                 document_count=doc_count.scalar() or 0,
                 requirement_count=req_count.scalar() or 0,
                 response_count=resp_count.scalar() or 0,
+                processing_status=p.processing_status,
+                processing_message=p.processing_message,
+                processing_started_at=p.processing_started_at,
             )
         )
 
@@ -127,6 +134,9 @@ async def get_project(
         document_count=doc_count.scalar() or 0,
         requirement_count=req_count.scalar() or 0,
         response_count=resp_count.scalar() or 0,
+        processing_status=project.processing_status,
+        processing_message=project.processing_message,
+        processing_started_at=project.processing_started_at,
     )
 
 
@@ -147,6 +157,7 @@ async def update_project(
         setattr(project, field, value)
 
     await db.flush()
+    await db.refresh(project)
     return ProjectResponse(
         id=project.id,
         name=project.name,
@@ -158,6 +169,9 @@ async def update_project(
         owner_id=project.owner_id,
         created_at=project.created_at,
         updated_at=project.updated_at,
+        processing_status=project.processing_status,
+        processing_message=project.processing_message,
+        processing_started_at=project.processing_started_at,
     )
 
 
